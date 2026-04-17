@@ -10,11 +10,29 @@
  * (`registerProvider`, `resolveSecret`, …) are provided so callers that only
  * need a single global registry can keep their imports flat.
  */
+import { parseCredentialRef } from "./parse_ref.js";
 
 /** Minimal interface every secret backend satisfies. */
 export interface CredentialProvider {
   /** Look up a secret by logical name. Returns `null` on miss. */
   getSecret(name: string): Promise<string | null>;
+  /**
+   * Optional metadata lookup. Default built-in providers fall back to
+   * calling getSecret and reporting `{exists, provider}` only. Cloud
+   * providers may override to surface real version / lastModified data.
+   */
+  describeSecret?(name: string): Promise<SecretMetadata | null>;
+}
+
+export interface SecretMetadata {
+  /** True when the secret exists in this backend. */
+  exists: boolean;
+  /** Backend-reported version identifier, if available. */
+  version?: string;
+  /** When the secret was last modified, if the backend tracks it. */
+  lastModified?: Date;
+  /** Which registered provider name produced this record. */
+  provider: string;
 }
 
 export interface ResolveSecretOptions {
@@ -25,6 +43,11 @@ export interface ResolveSecretOptions {
    * returns `null` or throws.
    */
   fallback?: string[];
+}
+
+export interface ResolveSecretsOptions {
+  /** When true, any null result (miss) causes the batch to reject. */
+  strict?: boolean;
 }
 
 /**
@@ -98,6 +121,81 @@ export class CredentialResolver {
     }
     return null;
   }
+
+  /**
+   * Resolve multiple credential references in parallel.
+   *
+   * Each entry in `specs` maps an alias to a reference string (e.g.
+   * `{db: "env:PGPASSWORD", token: "keychain:gh"}`). Every reference is
+   * parsed up front with `strict: true` so typos in config surface at
+   * batch time rather than silently returning null.
+   *
+   * Per-alias errors are collected and re-thrown as an `AggregateError`
+   * — individual errors are wrapped to include their alias name so the
+   * `.errors` array is self-describing. With `strict: true`, any null
+   * result (miss) also causes the batch to reject.
+   */
+  async resolveSecrets(
+    specs: Record<string, string>,
+    options: ResolveSecretsOptions = {},
+  ): Promise<Record<string, string | null>> {
+    const aliases = Object.keys(specs);
+    const parsed = aliases.map((alias) => ({
+      alias,
+      ref: parseCredentialRef(specs[alias] as string, {
+        strict: true,
+        resolver: this,
+      }),
+    }));
+
+    const settled = await Promise.allSettled(
+      parsed.map(({ ref }) => {
+        if (ref === null) return Promise.resolve(null);
+        return this.resolveSecret(ref.key, { provider: ref.provider });
+      }),
+    );
+
+    const errors: Error[] = [];
+    const failedAliases: string[] = [];
+    const out: Record<string, string | null> = {};
+    for (let i = 0; i < aliases.length; i++) {
+      const alias = aliases[i] as string;
+      const result = settled[i];
+      if (result === undefined) continue;
+      if (result.status === "rejected") {
+        const original = result.reason;
+        const origMsg =
+          original instanceof Error
+            ? original.message
+            : String(original);
+        const wrapped = new Error(
+          `resolveSecrets: alias "${alias}" failed: ${origMsg}`,
+        );
+        errors.push(wrapped);
+        failedAliases.push(alias);
+      } else {
+        out[alias] = result.value;
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new AggregateError(
+        errors,
+        `resolveSecrets failed for: ${failedAliases.join(", ")}`,
+      );
+    }
+
+    if (options.strict) {
+      const missingAliases = aliases.filter((a) => out[a] === null);
+      if (missingAliases.length > 0) {
+        throw new Error(
+          `resolveSecrets strict: aliases returned null: ${missingAliases.join(", ")}`,
+        );
+      }
+    }
+
+    return out;
+  }
 }
 
 /** Shared resolver used by the module-level delegators below. */
@@ -114,6 +212,9 @@ export const listProviders = defaultResolver.list.bind(defaultResolver);
 /** Resolve a secret via the {@link defaultResolver}. */
 export const resolveSecret =
   defaultResolver.resolveSecret.bind(defaultResolver);
+/** Resolve a batch of credential references via the {@link defaultResolver}. */
+export const resolveSecrets =
+  defaultResolver.resolveSecrets.bind(defaultResolver);
 
 // Re-export provider implementations so callers can import everything from
 // `@narai/credential-providers` directly.

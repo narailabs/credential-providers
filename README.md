@@ -115,6 +115,35 @@ Unknown schemes behave exactly like unknown bare prefixes — `null` by default,
 
 This lets a transient AWS network blip fall through to keychain without the user seeing an error.
 
+## Resolving multiple secrets at once
+
+`resolveSecrets(specs)` parses each reference, fires every lookup in parallel, and collects results under the alias you pick:
+
+```ts
+import { resolveSecrets } from "@narai/credential-providers";
+
+const { db, token } = await resolveSecrets({
+  db:    "env:PGPASSWORD",
+  token: "keychain:github",
+});
+```
+
+Misses return `null` for that alias. Pass `{ strict: true }` to throw if any alias misses. Per-alias failures surface as an `AggregateError` whose `.errors` are each tagged with the alias name.
+
+## Metadata
+
+Every provider exposes `describeSecret(name)` for an existence check without leaking the value:
+
+```ts
+import { FileProvider } from "@narai/credential-providers";
+
+const provider = new FileProvider({ path: "/etc/creds.json" });
+const meta = await provider.describeSecret("db.password");
+// { exists: true, provider: "file", lastModified: Date }
+```
+
+The built-in providers report `{exists, provider}` (plus `lastModified` from `FileProvider`). Custom backends can override to surface real version/lastModified fields.
+
 ## Redacting secrets from logs
 
 Once a secret is resolved, keep it out of logs and error reports with `redact`:

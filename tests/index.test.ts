@@ -9,6 +9,7 @@ import {
   listProviders,
   registerProvider,
   resolveSecret,
+  resolveSecrets,
   type CredentialProvider,
 } from "../src/index.js";
 
@@ -128,6 +129,85 @@ describe("credential_providers/index", () => {
       fallback: ["good"],
     });
     expect(value).toBe("v");
+  });
+});
+
+describe("resolveSecrets (batch)", () => {
+  beforeEach(() => {
+    clearProviders();
+  });
+
+  afterEach(() => {
+    clearProviders();
+  });
+
+  it("resolves multiple refs in parallel", async () => {
+    registerProvider("envA", makeProvider({ DB_PASSWORD: "dbpw" }));
+    registerProvider("envB", makeProvider({ TOKEN: "tkn" }));
+    const out = await resolveSecrets({
+      db: "envA:DB_PASSWORD",
+      token: "envB:TOKEN",
+    });
+    expect(out).toEqual({ db: "dbpw", token: "tkn" });
+  });
+
+  it("returns null for misses when not strict", async () => {
+    registerProvider("src", makeProvider({ present: "v" }));
+    const out = await resolveSecrets({
+      a: "src:present",
+      b: "src:absent",
+    });
+    expect(out).toEqual({ a: "v", b: null });
+  });
+
+  it("throws under strict: true when any alias is null", async () => {
+    registerProvider("src", makeProvider({ present: "v" }));
+    await expect(
+      resolveSecrets(
+        { a: "src:present", b: "src:absent" },
+        { strict: true },
+      ),
+    ).rejects.toThrow(/aliases returned null: b/);
+  });
+
+  it("AggregateError wraps per-alias errors with the alias name", async () => {
+    registerProvider("broken", makeProvider({}, "boom-key"));
+    registerProvider("good", makeProvider({ ok: "v" }));
+    const promise = resolveSecrets({
+      bad: "broken:boom-key",
+      fine: "good:ok",
+    });
+    await expect(promise).rejects.toBeInstanceOf(AggregateError);
+    try {
+      await promise;
+    } catch (err) {
+      const agg = err as AggregateError;
+      expect(agg.errors).toHaveLength(1);
+      expect((agg.errors[0] as Error).message).toMatch(/alias "bad" failed/);
+      expect(agg.message).toMatch(/bad/);
+    }
+  });
+
+  it("throws upfront for an invalid ref string (unknown provider prefix)", async () => {
+    registerProvider("src", makeProvider({ ok: "v" }));
+    await expect(
+      resolveSecrets({ a: "nosuch:whatever", b: "src:ok" }),
+    ).rejects.toThrow(/unknown credential provider/);
+  });
+
+  it("returns an empty object for empty specs", async () => {
+    const out = await resolveSecrets({});
+    expect(out).toEqual({});
+  });
+
+  it("preserves insertion order in the returned object", async () => {
+    registerProvider("src", makeProvider({ a: "1", b: "2", c: "3" }));
+    const out = await resolveSecrets({
+      zeta: "src:a",
+      alpha: "src:b",
+      mu: "src:c",
+    });
+    expect(Object.keys(out)).toEqual(["zeta", "alpha", "mu"]);
   });
 });
 

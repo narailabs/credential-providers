@@ -13,7 +13,7 @@
  * All calls are read-only (`getSecret`). Write/rotate flows are
  * intentionally out of scope for this package.
  */
-import type { CredentialProvider } from "./index.js";
+import type { CredentialProvider, SecretMetadata } from "./index.js";
 
 export type CloudSubProvider = "aws" | "gcp" | "azure";
 
@@ -84,6 +84,11 @@ export class CloudSecretsProvider implements CredentialProvider {
 
   clearCache(): void {
     this._cache.clear();
+  }
+
+  async describeSecret(name: string): Promise<SecretMetadata> {
+    const value = await this.getSecret(name);
+    return { exists: value !== null, provider: "cloud_secrets" };
   }
 
   private async _fetchSecret(name: string): Promise<string | null> {

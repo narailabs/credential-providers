@@ -10,7 +10,7 @@
  * warning makes the trade-off explicit.
  */
 import * as fs from "node:fs";
-import type { CredentialProvider } from "./index.js";
+import type { CredentialProvider, SecretMetadata } from "./index.js";
 
 export interface FileProviderOptions {
   /** Absolute path to the JSON secrets file. */
@@ -90,6 +90,17 @@ export class FileProvider implements CredentialProvider {
       if (typeof cur === "string") return cur;
     }
     return null;
+  }
+
+  async describeSecret(name: string): Promise<SecretMetadata> {
+    const value = await this.getSecret(name);
+    let lastModified: Date | undefined;
+    try {
+      lastModified = fs.statSync(this._path).mtime;
+    } catch {
+      // file absent or unreadable — skip
+    }
+    return { exists: value !== null, provider: "file", lastModified };
   }
 
   private _warnOnce(): void {

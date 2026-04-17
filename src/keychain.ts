@@ -10,7 +10,7 @@
  *               clear error with the install command.
  */
 import { execFileSync } from "node:child_process";
-import type { CredentialProvider } from "./index.js";
+import type { CredentialProvider, SecretMetadata } from "./index.js";
 
 export interface KeychainProviderOptions {
   /**
@@ -59,6 +59,11 @@ export class KeychainProvider implements CredentialProvider {
           `keychain provider unsupported on platform '${this._platform}'`,
         );
     }
+  }
+
+  async describeSecret(name: string): Promise<SecretMetadata> {
+    const value = await this.getSecret(name);
+    return { exists: value !== null, provider: "keychain" };
   }
 
   private _macos(service: string): string | null {

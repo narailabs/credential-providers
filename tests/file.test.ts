@@ -131,6 +131,31 @@ describe("credential_providers/file", () => {
     },
   );
 
+  describe("describeSecret", () => {
+    it("reports exists=true with provider name and lastModified", async () => {
+      const p = path.join(tmpDir, "secrets.json");
+      fs.writeFileSync(p, JSON.stringify({ token: "v" }));
+      if (process.platform !== "win32") fs.chmodSync(p, 0o600);
+      const provider = new FileProvider({ path: p, suppressWarning: true });
+      const meta = await provider.describeSecret("token");
+      expect(meta.exists).toBe(true);
+      expect(meta.provider).toBe("file");
+      expect(meta.lastModified).toBeInstanceOf(Date);
+      const mtime = fs.statSync(p).mtime.getTime();
+      expect(meta.lastModified?.getTime()).toBe(mtime);
+    });
+
+    it("reports exists=false for absent keys", async () => {
+      const p = path.join(tmpDir, "secrets.json");
+      fs.writeFileSync(p, JSON.stringify({ k: "v" }));
+      if (process.platform !== "win32") fs.chmodSync(p, 0o600);
+      const provider = new FileProvider({ path: p, suppressWarning: true });
+      const meta = await provider.describeSecret("missing");
+      expect(meta.exists).toBe(false);
+      expect(meta.provider).toBe("file");
+    });
+  });
+
   describe("cache TTL", () => {
     beforeEach(() => {
       vi.useFakeTimers();

@@ -261,4 +261,35 @@ describe("credential_providers/cloud_secrets", () => {
       expect(send).toHaveBeenCalledTimes(3);
     });
   });
+
+  describe("describeSecret", () => {
+    it("reports exists=true for present keys", async () => {
+      const send = vi.fn().mockResolvedValue({ SecretString: "v" });
+      const p = CloudSecretsProvider.forTesting({
+        subProvider: "aws",
+        awsRegion: "us-east-1",
+        client: { send },
+      });
+      expect(await p.describeSecret("present")).toEqual({
+        exists: true,
+        provider: "cloud_secrets",
+      });
+    });
+
+    it("reports exists=false when the backend raises not-found", async () => {
+      const err = Object.assign(new Error("missing"), {
+        name: "ResourceNotFoundException",
+      });
+      const send = vi.fn().mockRejectedValue(err);
+      const p = CloudSecretsProvider.forTesting({
+        subProvider: "aws",
+        awsRegion: "us-east-1",
+        client: { send },
+      });
+      expect(await p.describeSecret("absent")).toEqual({
+        exists: false,
+        provider: "cloud_secrets",
+      });
+    });
+  });
 });

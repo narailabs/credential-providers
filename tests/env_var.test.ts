@@ -56,4 +56,22 @@ describe("credential_providers/env_var", () => {
     const p = new EnvVarProvider({ prefix: "MYAPP_" });
     expect(await p.getSecret("dev_user")).toBe("admin");
   });
+
+  it("describeSecret reports exists=true for present values", async () => {
+    setEnv("PRESENT_VAR", "v");
+    const p = new EnvVarProvider();
+    expect(await p.describeSecret("PRESENT_VAR")).toEqual({
+      exists: true,
+      provider: "env_var",
+    });
+  });
+
+  it("describeSecret reports exists=false for absent values", async () => {
+    setEnv("ABSENT_VAR", undefined);
+    const p = new EnvVarProvider();
+    expect(await p.describeSecret("ABSENT_VAR")).toEqual({
+      exists: false,
+      provider: "env_var",
+    });
+  });
 });

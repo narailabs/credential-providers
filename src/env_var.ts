@@ -9,7 +9,7 @@
  * The optional `prefix` lets callers scope a family of secrets (e.g. an
  * application that wants all its env-var credentials under `MYAPP_`).
  */
-import type { CredentialProvider } from "./index.js";
+import type { CredentialProvider, SecretMetadata } from "./index.js";
 
 export interface EnvVarProviderOptions {
   /** Optional prefix applied to the normalized name. */
@@ -31,6 +31,11 @@ export class EnvVarProvider implements CredentialProvider {
     const value = process.env[normalized];
     if (value !== undefined && value !== "") return value;
     return null;
+  }
+
+  async describeSecret(name: string): Promise<SecretMetadata> {
+    const value = await this.getSecret(name);
+    return { exists: value !== null, provider: "env_var" };
   }
 }
 

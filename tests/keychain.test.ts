@@ -237,4 +237,28 @@ describe("credential_providers/keychain", () => {
       await expect(p.getSecret("x")).rejects.toThrow(/aix/);
     });
   });
+
+  describe("describeSecret", () => {
+    it("reports exists=true for present keys", async () => {
+      execMock.mockReturnValueOnce("v\n");
+      const p = new KeychainProvider({ platform: "darwin" });
+      expect(await p.describeSecret("present")).toEqual({
+        exists: true,
+        provider: "keychain",
+      });
+    });
+
+    it("reports exists=false for absent keys", async () => {
+      const err = new Error("not found") as Error & { status?: number };
+      err.status = 44;
+      execMock.mockImplementationOnce(() => {
+        throw err;
+      });
+      const p = new KeychainProvider({ platform: "darwin" });
+      expect(await p.describeSecret("absent")).toEqual({
+        exists: false,
+        provider: "keychain",
+      });
+    });
+  });
 });
