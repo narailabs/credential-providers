@@ -4,7 +4,7 @@ Pluggable secret-resolution for Node apps. Four built-in backends, one interface
 
 - **`EnvVarProvider`** — `process.env` lookup with verbatim-then-normalized matching (`DB_PASSWORD` → `env:db-password`).
 - **`FileProvider`** — JSON file with flat keys or dotted paths; refuses group/world-readable files (POSIX `0o077` check).
-- **`KeychainProvider`** — macOS (`security`) and Linux (`secret-tool`). Windows intentionally unsupported.
+- **`KeychainProvider`** — macOS (`security`), Linux (`secret-tool`), and Windows (`@napi-rs/keyring`, optional peer dep — see [Platform support](#platform-support)).
 - **`CloudSecretsProvider`** — dispatcher over AWS Secrets Manager, GCP Secret Manager, Azure Key Vault. Each SDK loaded lazily via dynamic `import()` so you only pay for the one you use.
 
 The library is pure TypeScript with **no runtime dependencies**. Cloud SDKs are loaded on demand and must be installed by the consumer when that sub-provider is used — the library prints the exact `npm install` command if a required SDK is missing.
@@ -27,6 +27,18 @@ npm install @google-cloud/secret-manager
 # Azure Key Vault
 npm install @azure/keyvault-secrets @azure/identity
 ```
+
+## Platform support
+
+`KeychainProvider` backends by platform:
+
+| Platform | Backend                  | Extra install               |
+| -------- | ------------------------ | --------------------------- |
+| macOS    | `security` (built-in)    | none                        |
+| Linux    | `secret-tool` (libsecret) | `apt install libsecret-tools` |
+| Windows  | `@napi-rs/keyring`        | `npm install --save-dev @napi-rs/keyring` |
+
+On Windows, `KeychainProvider` stores and retrieves secrets through Windows Credential Manager via the [`@napi-rs/keyring`](https://www.npmjs.com/package/@napi-rs/keyring) N-API binding. It is declared as an optional peer dependency so macOS and Linux users don't pay the native-binding install cost. The library lazy-imports it only when `process.platform === "win32"`, and prints a clear install hint if it's missing.
 
 ## Usage
 
