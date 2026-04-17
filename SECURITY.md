@@ -3,7 +3,7 @@
 ## Reporting a Vulnerability
 
 Please report suspected security vulnerabilities by emailing
-`security@narai.labs`. Include a description of the issue, the affected
+`security@narailabs.com`. Include a description of the issue, the affected
 version, and steps to reproduce. We aim to acknowledge reports within a
 few business days.
 
