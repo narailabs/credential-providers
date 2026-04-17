@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   CredentialResolver,
+  KNOWN_PROVIDERS,
   clearProviders,
   getProvider,
   listProviders,
@@ -235,5 +236,17 @@ describe("CredentialResolver", () => {
     b.register("x", { async getSecret() { return "b-val"; } });
     expect(await a.resolveSecret("anything")).toBe("a-val");
     expect(await b.resolveSecret("anything")).toBe("b-val");
+  });
+
+  describe("KNOWN_PROVIDERS", () => {
+    it("contains every built-in short name and is frozen", () => {
+      expect([...KNOWN_PROVIDERS]).toEqual([
+        "env",
+        "keychain",
+        "file",
+        "cloud",
+      ]);
+      expect(Object.isFrozen(KNOWN_PROVIDERS)).toBe(true);
+    });
   });
 });

@@ -17,6 +17,15 @@ export interface CredentialProvider {
   /** Look up a secret by logical name. Returns `null` on miss. */
   getSecret(name: string): Promise<string | null>;
   /**
+   * Optional synchronous lookup, for callers that cannot await (module-level
+   * config resolution, legacy synchronous dispatchers). Providers backed by
+   * sync-capable stores (`process.env`, `fs.readFileSync`) implement this;
+   * keychain and cloud providers do not because their backing APIs are
+   * async-only. Callers that need broad backend coverage should prefer
+   * `getSecret`.
+   */
+  getSecretSync?(name: string): string | null;
+  /**
    * Optional metadata lookup. Default built-in providers fall back to
    * calling getSecret and reporting `{exists, provider}` only. Cloud
    * providers may override to surface real version / lastModified data.
@@ -197,6 +206,20 @@ export class CredentialResolver {
     return out;
   }
 }
+
+/**
+ * Built-in provider short names. Matches the reference-string aliases
+ * recognized by `parseCredentialRef` (`env` → `env_var`, `cloud` →
+ * `cloud_secrets`). Consumers can iterate or narrow against this literal;
+ * the tuple is frozen so runtime mutation is rejected in strict mode.
+ */
+export const KNOWN_PROVIDERS = Object.freeze([
+  "env",
+  "keychain",
+  "file",
+  "cloud",
+] as const) satisfies readonly ["env", "keychain", "file", "cloud"];
+export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
 
 /** Shared resolver used by the module-level delegators below. */
 export const defaultResolver = new CredentialResolver();

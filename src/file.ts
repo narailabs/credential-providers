@@ -73,6 +73,10 @@ export class FileProvider implements CredentialProvider {
    *      reuse the same file/mode/warning machinery.
    */
   async getSecret(name: string): Promise<string | null> {
+    return this.getSecretSync(name);
+  }
+
+  getSecretSync(name: string): string | null {
     this._warnOnce();
     const data = this._load();
     if (data === null) return null;
@@ -93,7 +97,7 @@ export class FileProvider implements CredentialProvider {
   }
 
   async describeSecret(name: string): Promise<SecretMetadata> {
-    const value = await this.getSecret(name);
+    const value = this.getSecretSync(name);
     let lastModified: Date | undefined;
     try {
       lastModified = fs.statSync(this._path).mtime;

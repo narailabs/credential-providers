@@ -131,6 +131,57 @@ describe("credential_providers/file", () => {
     },
   );
 
+  describe("getSecretSync", () => {
+    it("returns the value for a literal top-level key", () => {
+      const p = path.join(tmpDir, "secrets.json");
+      fs.writeFileSync(p, JSON.stringify({ token: "ghp_sync" }));
+      if (process.platform !== "win32") fs.chmodSync(p, 0o600);
+      const provider = new FileProvider({ path: p, suppressWarning: true });
+      expect(provider.getSecretSync("token")).toBe("ghp_sync");
+    });
+
+    it("walks a dotted path", () => {
+      const p = path.join(tmpDir, "secrets.json");
+      fs.writeFileSync(
+        p,
+        JSON.stringify({ "db-prod": { password: "pw-sync" } }),
+      );
+      if (process.platform !== "win32") fs.chmodSync(p, 0o600);
+      const provider = new FileProvider({ path: p, suppressWarning: true });
+      expect(provider.getSecretSync("db-prod.password")).toBe("pw-sync");
+    });
+
+    it("returns null on miss", () => {
+      const p = path.join(tmpDir, "secrets.json");
+      fs.writeFileSync(p, JSON.stringify({ a: "1" }));
+      if (process.platform !== "win32") fs.chmodSync(p, 0o600);
+      const provider = new FileProvider({ path: p, suppressWarning: true });
+      expect(provider.getSecretSync("absent")).toBeNull();
+    });
+
+    it("returns null when the file does not exist", () => {
+      const provider = new FileProvider({
+        path: path.join(tmpDir, "nope.json"),
+        suppressWarning: true,
+      });
+      expect(provider.getSecretSync("anything")).toBeNull();
+    });
+
+    it.skipIf(process.platform === "win32")(
+      "refuses a 0644 file synchronously",
+      () => {
+        const p = path.join(tmpDir, "loose.json");
+        fs.writeFileSync(p, JSON.stringify({ token: "nope" }));
+        fs.chmodSync(p, 0o644);
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        const provider = new FileProvider({ path: p });
+        expect(() => provider.getSecretSync("token")).toThrow(
+          /file mode 644 is group- or world-accessible/,
+        );
+      },
+    );
+  });
+
   describe("describeSecret", () => {
     it("reports exists=true with provider name and lastModified", async () => {
       const p = path.join(tmpDir, "secrets.json");

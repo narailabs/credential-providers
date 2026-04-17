@@ -74,4 +74,37 @@ describe("credential_providers/env_var", () => {
       provider: "env_var",
     });
   });
+
+  describe("getSecretSync", () => {
+    it("finds a literal match synchronously", () => {
+      setEnv("GITHUB_TOKEN", "ghp_sync");
+      const p = new EnvVarProvider();
+      expect(p.getSecretSync("GITHUB_TOKEN")).toBe("ghp_sync");
+    });
+
+    it("normalizes synchronously", () => {
+      setEnv("GITHUB_TOKEN", "ghp_sync_norm");
+      const p = new EnvVarProvider();
+      expect(p.getSecretSync("github.token")).toBe("ghp_sync_norm");
+      expect(p.getSecretSync("github-token")).toBe("ghp_sync_norm");
+    });
+
+    it("returns null on miss", () => {
+      setEnv("ABSENT_SYNC_VAR", undefined);
+      const p = new EnvVarProvider();
+      expect(p.getSecretSync("absent-sync-var")).toBeNull();
+    });
+
+    it("treats empty string as a miss", () => {
+      setEnv("EMPTY_SYNC_VAR", "");
+      const p = new EnvVarProvider();
+      expect(p.getSecretSync("empty-sync-var")).toBeNull();
+    });
+
+    it("honors prefix", () => {
+      setEnv("MYAPP_SYNC_USER", "admin-sync");
+      const p = new EnvVarProvider({ prefix: "MYAPP_" });
+      expect(p.getSecretSync("sync_user")).toBe("admin-sync");
+    });
+  });
 });

@@ -87,7 +87,7 @@ if (ref === null) {
 return await resolveSecret(ref.key, { provider: ref.provider });
 ```
 
-Known prefixes: `env` / `env_var`, `keychain`, `file`, `cloud` / `cloud_secrets`. Unknown prefixes pass through as literals.
+Known prefixes: `env` / `env_var`, `keychain`, `file`, `cloud` / `cloud_secrets`. The short forms are also exported as `KNOWN_PROVIDERS` (a frozen readonly tuple) for consumers that iterate over or narrow against the catalog. Unknown prefixes pass through as literals.
 
 #### URI-form references
 
@@ -103,6 +103,28 @@ pg_cert:  file:///etc/creds.json#prod.sslcert
 Both forms are interchangeable — `env:PGPASSWORD` and `env://PGPASSWORD` parse to the same `{provider: "env_var", key: "PGPASSWORD"}`. For `file://` URIs, the fragment after `#` carries the dotted key inside the JSON and is folded back into the FileProvider's native `path:dotted.key` shape. Windows drive paths (`file:///C:/creds.json#user`) are preserved verbatim.
 
 Unknown schemes behave exactly like unknown bare prefixes — `null` by default, or `throw` when called with `{ strict: true }`.
+
+## Sync path
+
+Callers that cannot `await` (module-level config resolution, legacy synchronous dispatchers) can use `getSecretSync(name): string | null` on the providers whose backing store is itself synchronous:
+
+| Provider                  | `getSecretSync`?                                    |
+| ------------------------- | --------------------------------------------------- |
+| `EnvVarProvider`          | yes — reads `process.env`                           |
+| `FileProvider`            | yes — uses `fs.readFileSync` with the same mode/symlink checks as the async path |
+| `KeychainProvider`        | no — native keychain APIs are async-only            |
+| `CloudSecretsProvider`    | no — AWS/GCP/Azure SDKs are network-bound and async |
+
+Semantics match `getSecret`: same parsing, same dot-path traversal, same POSIX `0o077` refusal, `null` on miss, throws on corrupt input. Reach for the async path whenever you can — it's the only surface that covers every backend.
+
+```ts
+import { EnvVarProvider, FileProvider } from "@narai/credential-providers";
+
+const env = new EnvVarProvider();
+const file = new FileProvider({ path: "/etc/creds.json" });
+
+const token = env.getSecretSync("GITHUB_TOKEN") ?? file.getSecretSync("github.token");
+```
 
 ## Chain semantics
 

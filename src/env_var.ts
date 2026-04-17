@@ -24,6 +24,10 @@ export class EnvVarProvider implements CredentialProvider {
   }
 
   async getSecret(name: string): Promise<string | null> {
+    return this.getSecretSync(name);
+  }
+
+  getSecretSync(name: string): string | null {
     const literal = process.env[name];
     if (literal !== undefined && literal !== "") return literal;
 
@@ -34,7 +38,7 @@ export class EnvVarProvider implements CredentialProvider {
   }
 
   async describeSecret(name: string): Promise<SecretMetadata> {
-    const value = await this.getSecret(name);
+    const value = this.getSecretSync(name);
     return { exists: value !== null, provider: "env_var" };
   }
 }

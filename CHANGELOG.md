@@ -5,6 +5,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-17
+
+### Added
+- `CredentialProvider.getSecretSync?(name): string | null` — optional synchronous lookup for callers that cannot `await`. Implemented on `EnvVarProvider` and `FileProvider`, whose backing stores are themselves sync (`process.env`, `fs.readFileSync`). `KeychainProvider` and `CloudSecretsProvider` intentionally do not implement it — their backends are async-only. Semantics match `getSecret`: same parsing, same POSIX `0o077` mode refusal, same dot-path traversal, `null` on miss.
+- `KNOWN_PROVIDERS` export — frozen readonly tuple of built-in short names (`"env"`, `"keychain"`, `"file"`, `"cloud"`) plus a `KnownProvider` type alias for narrowing.
+
+### Security
+- `CloudSecretsProvider` (`gcp` sub-provider) validates the secret name against `/^[a-zA-Z][a-zA-Z0-9_-]{0,254}$/` before interpolating it into the `projects/<id>/secrets/<name>/versions/<v>` resource path. Caller-supplied names with path separators or other metachars now throw locally instead of reaching the API.
+
 ## [0.2.0] - 2026-04-17
 
 ### Added
