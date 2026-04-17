@@ -218,11 +218,24 @@ async function _awsGetSecret(
   }
 }
 
+// GCP Secret Manager resource-ID grammar: letter-first, up to 255 chars of
+// letters/digits/underscore/hyphen. Enforced here so a caller-supplied name
+// cannot inject extra path segments (e.g. `../other-proj/secrets/victim`)
+// into the `projects/.../secrets/<name>/versions/...` resource path.
+const GCP_SECRET_NAME_RE = /^[a-zA-Z][a-zA-Z0-9_-]{0,254}$/;
+
 async function _gcpGetSecret(
   client: unknown,
   name: string,
   config: CloudSecretsConfig,
 ): Promise<string | null> {
+  if (!GCP_SECRET_NAME_RE.test(name)) {
+    throw new Error(
+      `cloud_secrets gcp: invalid secret name '${name}'. ` +
+        `GCP secret IDs must start with a letter and contain only letters, ` +
+        `digits, underscores, and hyphens (max 255 chars).`,
+    );
+  }
   const version = config.gcpVersion ?? "latest";
   const fullName = `projects/${config.gcpProjectId}/secrets/${name}/versions/${version}`;
   const c = client as {

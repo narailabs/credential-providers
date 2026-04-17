@@ -97,6 +97,19 @@ describe("credential_providers/cloud_secrets", () => {
       });
       expect(await p.getSecret("x")).toBeNull();
     });
+
+    it("rejects names with forbidden characters before calling the client", async () => {
+      const accessSecretVersion = vi.fn();
+      const p = CloudSecretsProvider.forTesting({
+        subProvider: "gcp",
+        gcpProjectId: "proj-1",
+        client: { accessSecretVersion },
+      });
+      await expect(
+        p.getSecret("../../other-proj/secrets/victim"),
+      ).rejects.toThrow(/invalid secret name/);
+      expect(accessSecretVersion).not.toHaveBeenCalled();
+    });
   });
 
   describe("azure sub-provider", () => {
