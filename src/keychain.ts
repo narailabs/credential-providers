@@ -5,9 +5,9 @@
  *   - darwin  → `security find-generic-password -s "<name>" -w`
  *   - linux   → `secret-tool lookup name "<name>"` (libsecret).
  *               If `secret-tool` is missing, throws a clear error.
- *   - win32   → unsupported (throws). Windows Credential Manager would
- *               require a different shell-out (`cmdkey`) or a native
- *               binding; intentionally out of scope for this phase.
+ *   - win32   → `@napi-rs/keyring` (Windows Credential Manager via N-API).
+ *               Lazy-imported; if the module is not installed, throws a
+ *               clear error with the install command.
  */
 import { execFileSync } from "node:child_process";
 import type { CredentialProvider } from "./index.js";
@@ -53,7 +53,7 @@ export class KeychainProvider implements CredentialProvider {
       case "linux":
         return this._linux(service);
       case "win32":
-        throw new Error("keychain provider unsupported on Windows");
+        return this._windows(service);
       default:
         throw new Error(
           `keychain provider unsupported on platform '${this._platform}'`,
@@ -100,6 +100,28 @@ export class KeychainProvider implements CredentialProvider {
       throw _wrapKeychainError(err, "secret-tool");
     }
   }
+
+  private async _windows(service: string): Promise<string | null> {
+    const mod = await _loadOptional(
+      "@napi-rs/keyring",
+      "npm install --save-dev @napi-rs/keyring",
+    );
+    const { Entry } = mod as {
+      Entry: new (
+        service: string,
+        account: string,
+      ) => { getPassword(): string | null };
+    };
+    const entry = new Entry(service, this._account ?? "default");
+    try {
+      const pw = entry.getPassword();
+      return pw === "" || pw === null ? null : pw;
+    } catch (err) {
+      const msg = (err as Error).message ?? "";
+      if (/not (found|exist)|no.*entry/i.test(msg)) return null;
+      throw new Error(`keychain provider on Windows: ${msg}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -129,4 +151,21 @@ function _wrapKeychainError(err: unknown, command: string): Error {
   return new Error(
     `keychain provider: ${command} failed (status=${e.status}): ${stderr || e.message}`,
   );
+}
+
+async function _loadOptional(
+  pkg: string,
+  install: string,
+): Promise<unknown> {
+  try {
+    return (await import(pkg)) as unknown;
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === "ERR_MODULE_NOT_FOUND" || e.code === "MODULE_NOT_FOUND") {
+      throw new Error(
+        `keychain provider on Windows requires '${pkg}'. Run: ${install}`,
+      );
+    }
+    throw err;
+  }
 }
