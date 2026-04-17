@@ -52,11 +52,11 @@ describe("credential_providers/keychain", () => {
       execMock.mockReturnValueOnce("v\n");
       const p = new KeychainProvider({
         platform: "darwin",
-        servicePrefix: "com.doc-wiki",
+        servicePrefix: "com.example.myapp",
       });
       await p.getSecret("github");
       const [, args] = execMock.mock.calls[0] as [string, string[]];
-      expect(args).toContain("com.doc-wiki.github");
+      expect(args).toContain("com.example.myapp.github");
     });
 
     it("returns null when security exits 44 (not-found)", async () => {
